@@ -18,7 +18,7 @@ async function tryFetchFromApi() {
   }
 }
 
-tryFetchFromApi();
+void tryFetchFromApi();
 </script>
 
 <template>

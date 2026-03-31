@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { Button, Cascader, Form, Input, Modal, message } from "ant-design-vue";
-import { ArrowRightOutlined, CalendarOutlined, EnvironmentOutlined, FileTextOutlined } from "@ant-design/icons-vue";
+import { Cascader, Form, Input, Modal, message } from "ant-design-vue";
+import { CalendarOutlined, EnvironmentOutlined, FileTextOutlined } from "@ant-design/icons-vue";
 import { computed, onBeforeUnmount, onMounted, reactive, ref } from "vue";
 import { OPC_COMMUNITY_EVENTS, type OpcCommunityEventItem } from "../../data/opcCommunityEvents";
 import { useOpcRegionDefaults } from "../../composables/useOpcRegionDefaults";
+import { useSubmitGuard } from "../../composables/useSubmitGuard";
 import { pathPrefixMatch, regionData } from "../../utils/regionMatch";
 
 const { loadingGeo, geoError, loadIpRegionPath, readStoredAuth } = useOpcRegionDefaults();
@@ -12,6 +13,7 @@ const regionValue = ref<string[]>([]);
 const initializing = ref(true);
 const registerOpen = ref(false);
 const activeEvent = ref<OpcCommunityEventItem | null>(null);
+const submitGuard = useSubmitGuard({ minIntervalMs: 800 });
 
 const registerForm = reactive({
   name: "",
@@ -76,21 +78,23 @@ function closeRegister() {
   registerOpen.value = false;
 }
 
-function submitRegister() {
-  if (!registerForm.name.trim()) {
-    message.warning("请填写联系人姓名");
-    return;
-  }
-  if (!/^1\d{10}$/.test(registerForm.phone)) {
-    message.warning("请输入正确的手机号");
-    return;
-  }
-  message.success(`已提交报名：${activeEvent.value?.title ?? "活动"}`);
-  registerForm.name = "";
-  registerForm.phone = "";
-  registerForm.company = "";
-  registerForm.remark = "";
-  registerOpen.value = false;
+async function submitRegister() {
+  await submitGuard.run(async () => {
+    if (!registerForm.name.trim()) {
+      message.warning("请填写联系人姓名");
+      return;
+    }
+    if (!/^1\d{10}$/.test(registerForm.phone)) {
+      message.warning("请输入正确的手机号");
+      return;
+    }
+    message.success(`已提交报名：${activeEvent.value?.title ?? "活动"}`);
+    registerForm.name = "";
+    registerForm.phone = "";
+    registerForm.company = "";
+    registerForm.remark = "";
+    registerOpen.value = false;
+  });
 }
 </script>
 
@@ -133,8 +137,15 @@ function submitRegister() {
 
     <p v-if="!initializing && !filteredEvents.length" class="state empty">当前地区暂无活动，请切换地区查看。</p>
 
-    <Modal v-model:open="registerOpen" :title="activeEvent ? `报名：${activeEvent.title}` : '活动报名'" ok-text="提交报名"
-      cancel-text="取消" @ok="submitRegister" @cancel="closeRegister">
+    <Modal
+      v-model:open="registerOpen"
+      :title="activeEvent ? `报名：${activeEvent.title}` : '活动报名'"
+      ok-text="提交报名"
+      cancel-text="取消"
+      :confirm-loading="submitGuard.loading.value"
+      @ok="submitRegister"
+      @cancel="closeRegister"
+    >
       <Form layout="vertical">
         <Form.Item label="联系人姓名" required>
           <Input v-model:value="registerForm.name" placeholder="请输入姓名" />

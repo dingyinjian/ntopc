@@ -1,11 +1,14 @@
 <script setup lang="ts">
-import { Cascader, Modal, Tag, Typography } from "ant-design-vue";
+import { PhoneOutlined } from "@ant-design/icons-vue";
+import { Button, Cascader, Modal, Tag, Typography } from "ant-design-vue";
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
+import { useRouter } from "vue-router";
 import { OPC_POLICIES } from "../../data/opcPolicies";
 import { useOpcRegionDefaults } from "../../composables/useOpcRegionDefaults";
 import { pathPrefixMatch, regionData } from "../../utils/regionMatch";
 
 const { loadingGeo, geoError, loadIpRegionPath, readStoredAuth } = useOpcRegionDefaults();
+const router = useRouter();
 
 const regionValue = ref<string[]>([]);
 const initializing = ref(true);
@@ -72,6 +75,15 @@ function openPolicyDetail(id: string) {
 function closePolicyDetail() {
   detailOpen.value = false;
 }
+
+function getContactText(contact?: string): string {
+  return contact && contact.trim() ? contact : "400-800-2026";
+}
+
+function goToSettlement() {
+  detailOpen.value = false;
+  void router.push("/opc-settlement");
+}
 </script>
 
 <template>
@@ -111,6 +123,10 @@ function closePolicyDetail() {
       >
         <h2 class="park">{{ item.parkName }}</h2>
         <p class="summary">{{ item.summary }}</p>
+        <p class="contact">
+          <PhoneOutlined class="contact-icon" />
+          联系方式：{{ getContactText(item.contact) }}
+        </p>
         <ul class="highlights" aria-label="政策亮点">
           <li v-for="(h, i) in item.highlights" :key="i">{{ h }}</li>
         </ul>
@@ -158,6 +174,18 @@ function closePolicyDetail() {
             </Typography.Link>
             <span v-else>—</span>
           </div>
+        </div>
+
+        <div class="detail-block">
+          <div class="detail-title">联系方式</div>
+          <div class="detail-text contact-detail">
+            <PhoneOutlined class="contact-icon" />
+            {{ getContactText(activePolicy.contact) }}
+          </div>
+        </div>
+
+        <div class="detail-actions">
+          <Button type="primary" @click="goToSettlement">立即申请</Button>
         </div>
       </div>
     </Modal>
@@ -260,6 +288,26 @@ function closePolicyDetail() {
   color: #475569;
 }
 
+.contact {
+  margin: 0 0 12px;
+  font-size: 12px;
+  color: #64748b;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.contact-icon {
+  color: #2563eb;
+  font-size: 14px;
+}
+
+.contact-detail {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .highlights {
   display: flex;
   flex-wrap: wrap;
@@ -328,6 +376,12 @@ function closePolicyDetail() {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+}
+
+.detail-actions {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 6px;
 }
 
 @media (max-width: 640px) {

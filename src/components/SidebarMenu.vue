@@ -31,6 +31,10 @@ const emit = defineEmits<{
 }>();
 
 function onNavigate(path: string) {
+  if (path === "/compute-service" || path === "/agent-plaza") {
+    window.open("https://ai.guxuan.cloud/", "_blank", "noopener,noreferrer");
+    return;
+  }
   emit("navigate", path);
 }
 

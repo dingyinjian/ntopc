@@ -5,6 +5,7 @@ export interface OpcPolicyItem {
   summary: string;
   details?: string;
   highlights: string[];
+  contact?: string;
   sourceName?: string;
   sourceUrl?: string;
   /** 省→市→区 或 省→区（直辖市） */
