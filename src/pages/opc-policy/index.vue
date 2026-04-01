@@ -1,17 +1,17 @@
 <script setup lang="ts">
 import { PhoneOutlined } from "@ant-design/icons-vue";
-import { Button, Cascader, Modal, Tag, Typography } from "ant-design-vue";
-import { computed, onBeforeUnmount, onMounted, ref } from "vue";
+import { Button, Modal, Tag, Typography } from "ant-design-vue";
+import { computed, ref } from "vue";
 import { useRouter } from "vue-router";
+import { NT_POLICY_DISTRICT_FILTERS } from "../../data/ntPolicyDistrictFilters";
 import { OPC_POLICIES } from "../../data/opcPolicies";
-import { useOpcRegionDefaults } from "../../composables/useOpcRegionDefaults";
-import { pathPrefixMatch, regionData } from "../../utils/regionMatch";
+import { useNtDistrictFilter } from "../../composables/useNtDistrictFilter";
+import { useOpcAppRegion } from "../../composables/useOpcAppRegion";
+import { pathPrefixMatch } from "../../utils/regionMatch";
 
-const { loadingGeo, geoError, loadIpRegionPath, readStoredAuth } = useOpcRegionDefaults();
+const { regionPath, regionReady } = useOpcAppRegion();
+const { ntDistrictFilter, isNantongContext, applyNtDistrictFilter } = useNtDistrictFilter(regionPath);
 const router = useRouter();
-
-const regionValue = ref<string[]>([]);
-const initializing = ref(true);
 const detailOpen = ref(false);
 const activePolicyId = ref<string | null>(null);
 
@@ -21,50 +21,10 @@ const activePolicy = computed(() => {
 });
 
 const filteredPolicies = computed(() => {
-  const sel = Array.isArray(regionValue.value) ? regionValue.value : [];
-  if (sel.length === 0) return OPC_POLICIES;
-  return OPC_POLICIES.filter((p) => pathPrefixMatch(p.regionPath, sel));
-});
-
-const regionLabelText = computed(() => {
-  const v = Array.isArray(regionValue.value) ? regionValue.value : [];
-  if (v.length === 0) return "";
-  const parts: string[] = [];
-  let options = regionData as { label: string; value: string; children?: typeof regionData }[];
-  for (const code of v) {
-    const node = options.find((o) => o.value === code);
-    if (!node) break;
-    parts.push(node.label);
-    options = (node.children ?? []) as typeof options;
-  }
-  return parts.join(" · ");
-});
-
-async function initRegion() {
-  initializing.value = true;
-  const auth = readStoredAuth();
-  if (auth?.profile?.regionPath?.length) {
-    regionValue.value = [...auth.profile.regionPath];
-  } else {
-    regionValue.value = await loadIpRegionPath();
-  }
-  initializing.value = false;
-}
-
-function onAuthChanged() {
-  const auth = readStoredAuth();
-  if (auth?.profile?.regionPath?.length) {
-    regionValue.value = [...auth.profile.regionPath];
-  }
-}
-
-onMounted(() => {
-  void initRegion();
-  window.addEventListener("weopc-auth-changed", onAuthChanged);
-});
-
-onBeforeUnmount(() => {
-  window.removeEventListener("weopc-auth-changed", onAuthChanged);
+  const sel = Array.isArray(regionPath.value) ? regionPath.value : [];
+  const list =
+    sel.length === 0 ? OPC_POLICIES : OPC_POLICIES.filter((p) => pathPrefixMatch(p.regionPath, sel));
+  return applyNtDistrictFilter(list);
 });
 
 function openPolicyDetail(id: string) {
@@ -90,25 +50,33 @@ function goToSettlement() {
   <section class="opc-policy">
     <header class="opc-policy-head">
       <h1>政策支持</h1>
-      <p class="lead">全国OPC社区政策查询,办理入驻以及优惠政策</p>
+      <p class="lead">根据顶部「所在地区」展示当前区域相关政策，办理入驻以及优惠政策。</p>
 
-      <div class="toolbar">
-        <span class="toolbar-label">地区筛选</span>
-        <Cascader
-          v-model:value="regionValue"
-          :options="regionData"
-          :change-on-select="true"
-          allow-clear
-          placeholder="省 / 市 / 区"
-          class="region-cascader"
-          :loading="initializing || loadingGeo"
-        />
-        <span v-if="regionLabelText" class="region-hint">{{ regionLabelText }}</span>
+      <div v-if="regionReady && isNantongContext" class="district-toolbar" aria-label="南通区县筛选">
+        <span class="district-toolbar-label">区县筛选</span>
+        <div class="district-tags">
+          <Tag
+            class="district-tag"
+            :color="ntDistrictFilter === 'all' ? 'blue' : 'default'"
+            @click="ntDistrictFilter = 'all'"
+          >
+            全部
+          </Tag>
+          <Tag
+            v-for="d in NT_POLICY_DISTRICT_FILTERS"
+            :key="d.code"
+            class="district-tag"
+            :color="ntDistrictFilter === d.code ? 'blue' : 'default'"
+            @click="ntDistrictFilter = d.code"
+          >
+            {{ d.label }}
+          </Tag>
+        </div>
+        <p class="district-hint">开发区为南通经济技术开发区；全市通用政策在任选区县时均会显示。</p>
       </div>
-      <p v-if="geoError" class="geo-msg">{{ geoError }}</p>
     </header>
 
-    <div v-if="initializing" class="state">正在加载默认地区…</div>
+    <div v-if="!regionReady" class="state">正在加载默认地区…</div>
 
     <div v-else class="card-grid">
       <article
@@ -133,7 +101,9 @@ function goToSettlement() {
       </article>
     </div>
 
-    <p v-if="!initializing && !filteredPolicies.length" class="state empty">当前地区下暂无示例政策，请调整筛选条件。</p>
+    <p v-if="regionReady && !filteredPolicies.length" class="state empty">
+      当前筛选下暂无政策，可切换顶部地区或区县筛选查看。
+    </p>
 
     <Modal
       v-model:open="detailOpen"
@@ -207,17 +177,14 @@ function goToSettlement() {
 }
 
 .lead {
-  margin: 0 0 20px;
+  margin: 0 0 16px;
   color: #64748b;
   font-size: 14px;
   line-height: 1.6;
 }
 
-.toolbar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 12px 16px;
+.district-toolbar {
+  margin-top: 4px;
   padding: 14px 16px;
   background: rgba(255, 255, 255, 0.72);
   border: 1px solid rgba(226, 232, 240, 0.9);
@@ -225,25 +192,31 @@ function goToSettlement() {
   box-shadow: 0 4px 18px rgba(15, 23, 42, 0.06);
 }
 
-.toolbar-label {
+.district-toolbar-label {
+  display: block;
   font-size: 13px;
   font-weight: 600;
   color: #334155;
+  margin-bottom: 10px;
 }
 
-.region-cascader {
-  min-width: min(100%, 320px);
+.district-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
-.region-hint {
-  font-size: 12px;
-  color: #64748b;
+.district-tag {
+  margin: 0;
+  cursor: pointer;
+  user-select: none;
 }
 
-.geo-msg {
+.district-hint {
   margin: 10px 0 0;
   font-size: 12px;
-  color: #b45309;
+  color: #94a3b8;
+  line-height: 1.5;
 }
 
 .card-grid {
@@ -384,14 +357,4 @@ function goToSettlement() {
   padding-top: 6px;
 }
 
-@media (max-width: 640px) {
-  .toolbar {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .region-cascader {
-    width: 100%;
-  }
-}
 </style>

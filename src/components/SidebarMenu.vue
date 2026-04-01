@@ -42,6 +42,11 @@ function openAuth(mode: "login" | "register") {
   emit("auth", mode);
 }
 
+function isNavActive(path: string) {
+  if (path === "/") return props.activePath === "/";
+  return props.activePath === path || props.activePath.startsWith(`${path}/`);
+}
+
 function navIcon(label: string): NavIcon {
   if (label === "首页") {
     return { icon: HomeOutlined, tone: "blue" };
@@ -98,7 +103,7 @@ const navTargetsWithIcons = computed(() =>
         v-for="item in navTargetsWithIcons"
         :key="item.label"
         href="#"
-        :class="{ active: props.activePath === item.path }"
+        :class="{ active: isNavActive(item.path) }"
         @click.prevent="onNavigate(item.path)"
       >
         <span class="nav-icon" :class="`tone-${item.tone}`" aria-hidden="true">

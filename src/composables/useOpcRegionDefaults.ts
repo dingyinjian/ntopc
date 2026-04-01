@@ -2,7 +2,11 @@ import { ref } from "vue";
 import { pathFromGeoNames } from "../utils/regionMatch";
 import { http } from "../utils/request";
 
-const STORAGE_AUTH = "weopc_auth";
+export const WEOPC_AUTH_STORAGE_KEY = "weopc_auth";
+
+/** 模块级共享，便于主布局与多页共用同一定位加载状态 */
+const loadingGeo = ref(true);
+const geoError = ref<string | null>(null);
 
 export interface AuthRegionProfile {
   /** 登录用户档案中的省市区路径（与 Cascader value 一致），登录后由后端/本地写入 */
@@ -12,11 +16,13 @@ export interface AuthRegionProfile {
 export interface StoredAuth {
   phone: string;
   profile?: AuthRegionProfile;
+  /** 登录密码 SHA-256 十六进制摘要（可选，个人中心设置/修改密码后写入） */
+  passwordHash?: string;
 }
 
 export function readStoredAuth(): StoredAuth | null {
   try {
-    const raw = localStorage.getItem(STORAGE_AUTH);
+    const raw = localStorage.getItem(WEOPC_AUTH_STORAGE_KEY);
     if (!raw) return null;
     const o = JSON.parse(raw) as StoredAuth;
     if (o?.phone && Array.isArray(o.profile?.regionPath)) return o;
@@ -33,16 +39,13 @@ export function writeAuthWithMockRegion(phone: string, regionPath: string[]) {
     phone,
     profile: { regionPath },
   };
-  localStorage.setItem(STORAGE_AUTH, JSON.stringify(payload));
+  localStorage.setItem(WEOPC_AUTH_STORAGE_KEY, JSON.stringify(payload));
 }
 
 // 默认地区：江苏省·南通市（省+市两级；若选择区县则由用户/定位结果补全）
 const DEFAULT_FALLBACK_PATH = ["32", "3206"];
 
 export function useOpcRegionDefaults() {
-  const loadingGeo = ref(true);
-  const geoError = ref<string | null>(null);
-
   function parseRectangleCenter(rectangle: string | undefined): { lng: number; lat: number } | null {
     if (!rectangle) return null;
     // 高德：rectangle = "lng1,lat1;lng2,lat2"
@@ -79,7 +82,7 @@ export function useOpcRegionDefaults() {
     });
   }
 
-  async function reverseGeocodeToCity(amapKey: string, lng: number, lat: number): Promise<string[] | null> {
+  async function reverseGeocodeToPath(amapKey: string, lng: number, lat: number): Promise<string[] | null> {
     const regeoRes = await http.get("https://restapi.amap.com/v3/geocode/regeo", {
       params: {
         key: amapKey,
@@ -97,6 +100,7 @@ export function useOpcRegionDefaults() {
         addressComponent?: {
           city?: unknown;
           province?: string;
+          district?: unknown;
         };
       };
     };
@@ -105,9 +109,9 @@ export function useOpcRegionDefaults() {
     const ac = regeoData.regeocode?.addressComponent;
     const province = (ac?.province ?? "").toString();
     const city = normalizeAmapCity(ac?.city);
+    const district = normalizeAmapCity(ac?.district);
 
-    // 只精确到“市”
-    const path = pathFromGeoNames(province, city, "");
+    const path = pathFromGeoNames(province, city, district);
     return path?.length ? path : null;
   }
 
@@ -126,7 +130,7 @@ export function useOpcRegionDefaults() {
       // 1) 优先：浏览器定位（更准确，可到区）
       try {
         const { lng, lat } = await getBrowserLocation();
-        const path = await reverseGeocodeToCity(amapKey, lng, lat);
+        const path = await reverseGeocodeToPath(amapKey, lng, lat);
         if (path?.length) return path;
       } catch {
         // 用户拒绝/超时/不支持：继续走 IP 方案兜底
@@ -151,7 +155,7 @@ export function useOpcRegionDefaults() {
 
       const center = parseRectangleCenter(ipData.rectangle);
       if (center) {
-        const path = await reverseGeocodeToCity(amapKey, center.lng, center.lat);
+        const path = await reverseGeocodeToPath(amapKey, center.lng, center.lat);
         if (path?.length) return path;
       }
 

@@ -15,11 +15,14 @@ const submitGuard = useSubmitGuard({ minIntervalMs: 1000 });
 const applyOpen = ref(false);
 const applyingDemandId = ref<string | null>(null);
 const applyGuard = useSubmitGuard({ minIntervalMs: 1000 });
+const detailOpen = ref(false);
+const detailDemandId = ref<string | null>(null);
 
 const publishForm = reactive({
   category: "AI开发" as DemandCategory,
   title: "",
   subtitle: "",
+  details: "",
   price: "",
   deadline: "",
   contact: "",
@@ -40,15 +43,29 @@ const filteredDemands = computed(() => {
       !k ||
       item.title.toLowerCase().includes(k) ||
       item.subtitle.toLowerCase().includes(k) ||
+      item.details.toLowerCase().includes(k) ||
       item.contact.toLowerCase().includes(k) ||
       item.location.toLowerCase().includes(k);
     return byCategory && byKeyword;
   });
 });
 
-function acceptOrder(title: string) {
-  const item = DEMAND_LIST.find((d) => d.title === title);
-  applyingDemandId.value = item?.id ?? null;
+function openDetail(id: string) {
+  detailDemandId.value = id;
+  detailOpen.value = true;
+}
+
+function closeDetail() {
+  detailOpen.value = false;
+}
+
+const detailDemand = computed(() => {
+  if (!detailDemandId.value) return null;
+  return DEMAND_LIST.find((d) => d.id === detailDemandId.value) ?? null;
+});
+
+function acceptOrder(id: string) {
+  applyingDemandId.value = id;
   applyOpen.value = true;
 }
 
@@ -56,6 +73,14 @@ const applyingDemand = computed(() => {
   if (!applyingDemandId.value) return null;
   return DEMAND_LIST.find((d) => d.id === applyingDemandId.value) ?? null;
 });
+
+function fromDetailToApply() {
+  if (detailDemandId.value) {
+    applyingDemandId.value = detailDemandId.value;
+    detailOpen.value = false;
+    applyOpen.value = true;
+  }
+}
 
 function resetApplyForm() {
   applyForm.intro = "";
@@ -78,6 +103,7 @@ function resetPublishForm() {
   publishForm.category = "AI开发";
   publishForm.title = "";
   publishForm.subtitle = "";
+  publishForm.details = "";
   publishForm.price = "";
   publishForm.deadline = "";
   publishForm.contact = "";
@@ -88,6 +114,7 @@ async function submitPublish() {
   await submitGuard.run(async () => {
     if (!publishForm.title.trim()) return message.warning("请填写需求标题");
     if (!publishForm.subtitle.trim()) return message.warning("请填写需求副标题");
+    if (!publishForm.details.trim()) return message.warning("请填写具体需求详情");
     if (!publishForm.price.trim()) return message.warning("请填写预算价格");
     if (!publishForm.deadline.trim()) return message.warning("请填写截止时间");
     if (!publishForm.location.trim()) return message.warning("请填写地点");
@@ -114,7 +141,11 @@ async function submitPublish() {
       </div>
 
       <div class="toolbar">
-        <Input v-model:value="filter.keyword" allow-clear placeholder="搜索标题 / 副标题 / 地点 / 联系方式" />
+        <Input
+          v-model:value="filter.keyword"
+          allow-clear
+          placeholder="搜索标题 / 副标题 / 详情 / 地点 / 联系方式"
+        />
         <div class="category-tags">
           <Tag
             v-for="item in DEMAND_CATEGORIES"
@@ -130,7 +161,16 @@ async function submitPublish() {
     </header>
 
     <div class="list">
-      <article v-for="item in filteredDemands" :key="item.id" class="demand-card">
+      <article
+        v-for="item in filteredDemands"
+        :key="item.id"
+        class="demand-card"
+        role="button"
+        tabindex="0"
+        @click="openDetail(item.id)"
+        @keydown.enter.prevent="openDetail(item.id)"
+        @keydown.space.prevent="openDetail(item.id)"
+      >
         <div class="row row1">
           <Tag color="geekblue">{{ item.category }}</Tag>
         </div>
@@ -155,12 +195,56 @@ async function submitPublish() {
           </div>
         </div>
         <div class="actions">
-          <Button type="primary" @click="acceptOrder(item.title)">接单</Button>
+          <Button type="primary" @click.stop="acceptOrder(item.id)">接单</Button>
         </div>
       </article>
     </div>
 
     <p v-if="!filteredDemands.length" class="empty">暂无匹配需求，请尝试调整搜索条件。</p>
+
+    <Modal
+      v-model:open="detailOpen"
+      :title="detailDemand?.title || '需求详情'"
+      :footer="null"
+      width="680px"
+      @cancel="closeDetail"
+    >
+      <div v-if="detailDemand" class="detail-wrap">
+        <div class="detail-block">
+          <Tag color="geekblue">{{ detailDemand.category }}</Tag>
+        </div>
+        <div class="detail-block">
+          <div class="detail-label">副标题</div>
+          <div class="detail-text">{{ detailDemand.subtitle }}</div>
+        </div>
+        <div class="detail-block">
+          <div class="detail-label">具体需求详情</div>
+          <pre class="detail-pre">{{ detailDemand.details }}</pre>
+        </div>
+        <div class="detail-info">
+          <div class="detail-row">
+            <EnvironmentOutlined class="row-icon icon-location" />
+            <span>地点：{{ detailDemand.location }}</span>
+          </div>
+          <div class="detail-row">
+            <DollarCircleOutlined class="row-icon icon-price" />
+            <span>价格：{{ detailDemand.price }}</span>
+          </div>
+          <div class="detail-row">
+            <CalendarOutlined class="row-icon icon-deadline" />
+            <span>截止时间：{{ detailDemand.deadline }}</span>
+          </div>
+          <div class="detail-row">
+            <PhoneOutlined class="row-icon icon-contact" />
+            <span>联系方式：{{ detailDemand.contact }}</span>
+          </div>
+        </div>
+        <div class="detail-footer">
+          <Button @click="closeDetail">关闭</Button>
+          <Button type="primary" @click="fromDetailToApply">接单</Button>
+        </div>
+      </div>
+    </Modal>
 
     <Modal
       v-model:open="publishOpen"
@@ -180,6 +264,13 @@ async function submitPublish() {
         </Form.Item>
         <Form.Item label="需求副标题">
           <Input v-model:value="publishForm.subtitle" placeholder="请输入需求副标题" />
+        </Form.Item>
+        <Form.Item label="具体需求详情">
+          <Input.TextArea
+            v-model:value="publishForm.details"
+            :auto-size="{ minRows: 5, maxRows: 14 }"
+            placeholder="请描述背景、交付范围、验收标准等（可多行）"
+          />
         </Form.Item>
         <Form.Item label="预算价格">
           <Input v-model:value="publishForm.price" placeholder="如：¥8,000 - ¥12,000" />
@@ -307,6 +398,18 @@ async function submitPublish() {
   padding: 14px 16px;
   line-height: 1.6;
   box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
+  cursor: pointer;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.demand-card:hover {
+  border-color: #cbd5e1;
+  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.08);
+}
+
+.demand-card:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
 }
 
 .row {
@@ -374,6 +477,64 @@ async function submitPublish() {
   margin-top: 18px;
   text-align: center;
   color: #94a3b8;
+}
+
+.detail-wrap {
+  display: grid;
+  gap: 14px;
+}
+
+.detail-block {
+  font-size: 14px;
+}
+
+.detail-label {
+  font-size: 12px;
+  color: #64748b;
+  margin-bottom: 4px;
+}
+
+.detail-text {
+  color: #334155;
+  line-height: 1.65;
+}
+
+.detail-pre {
+  margin: 0;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  font-size: 13px;
+  line-height: 1.7;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: #334155;
+  font-family: inherit;
+}
+
+.detail-info {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 12px 14px;
+  display: grid;
+  gap: 10px;
+}
+
+.detail-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #334155;
+}
+
+.detail-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 4px;
 }
 
 .apply-wrap {

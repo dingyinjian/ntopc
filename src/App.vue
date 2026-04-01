@@ -1,9 +1,13 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
+import AppRegionBar from "./components/AppRegionBar.vue";
 import AuthModal from "./components/AuthModal.vue";
 import SidebarMenu from "./components/SidebarMenu.vue";
+import { useOpcAppRegion } from "./composables/useOpcAppRegion";
 import { defaultHomeData, navItems } from "./types/weopc";
+
+const { bootstrap, onAuthChanged } = useOpcAppRegion();
 
 const route = useRoute();
 const router = useRouter();
@@ -63,14 +67,17 @@ function onKeydown(e: KeyboardEvent) {
 }
 
 onMounted(() => {
+  void bootstrap();
   window.addEventListener("resize", onViewportChange);
   window.addEventListener("keydown", onKeydown);
+  window.addEventListener("weopc-auth-changed", onAuthChanged);
 });
 
 onBeforeUnmount(() => {
   document.body.style.overflow = "";
   window.removeEventListener("resize", onViewportChange);
   window.removeEventListener("keydown", onKeydown);
+  window.removeEventListener("weopc-auth-changed", onAuthChanged);
 });
 </script>
 
@@ -105,7 +112,12 @@ onBeforeUnmount(() => {
       @auth="openAuth"
     />
     <main id="route-content" class="route-content">
-      <RouterView />
+      <div class="route-shell">
+        <AppRegionBar />
+        <div class="route-view">
+          <RouterView />
+        </div>
+      </div>
     </main>
     <AuthModal :visible="authVisible" :mode="authMode" @close="closeAuth" />
   </div>
@@ -137,6 +149,19 @@ onBeforeUnmount(() => {
 }
 
 .route-content {
+  min-width: 0;
+}
+
+.route-shell {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+}
+
+.route-view {
+  flex: 1;
+  min-height: 0;
   min-width: 0;
 }
 

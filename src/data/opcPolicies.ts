@@ -129,7 +129,7 @@ export const OPC_POLICIES: OpcPolicyItem[] = [
     highlights: ["场地支持", "设备共享", "产业对接"],
     sourceName: "南通开发区政策公告（示例）",
     sourceUrl: "https://example.com/policy/nt-01",
-    regionPath: ["32", "3206"],
+    regionPath: ["32", "3206", "320671"],
   },
   {
     id: "p16",
@@ -140,7 +140,7 @@ export const OPC_POLICIES: OpcPolicyItem[] = [
     highlights: ["算力支持", "研发补贴", "创业辅导"],
     sourceName: "南通创新区公示（示例）",
     sourceUrl: "https://example.com/policy/nt-02",
-    regionPath: ["32", "3206"],
+    regionPath: ["32", "3206", "320613"],
   },
   {
     id: "p17",
@@ -151,7 +151,7 @@ export const OPC_POLICIES: OpcPolicyItem[] = [
     highlights: ["免费工位", "创业投资", "政策申报"],
     sourceName: "南通高新区通知（示例）",
     sourceUrl: "https://example.com/policy/nt-03",
-    regionPath: ["32", "3206"],
+    regionPath: ["32", "3206", "320612"],
   },
   {
     id: "p18",
@@ -162,7 +162,7 @@ export const OPC_POLICIES: OpcPolicyItem[] = [
     highlights: ["检验检测", "产业协同", "绿色低碳"],
     sourceName: "滨江科创中心政策（示例）",
     sourceUrl: "https://example.com/policy/nt-04",
-    regionPath: ["32", "3206"],
+    regionPath: ["32", "3206", "320613"],
   },
   {
     id: "p19",
@@ -173,6 +173,34 @@ export const OPC_POLICIES: OpcPolicyItem[] = [
     highlights: ["算力支持", "云资源优惠", "数据合规"],
     sourceName: "通州湾政策来源（示例）",
     sourceUrl: "https://example.com/policy/nt-05",
+    regionPath: ["32", "3206", "320612"],
+  },
+  {
+    id: "p20",
+    parkName: "如皋软件园 OPC 企业服务站",
+    summary: "面向软件与信息服务企业，提供场地扶持、人才引进补贴与政策代办一站式服务。",
+    highlights: ["场地扶持", "人才补贴", "政策代办"],
+    regionPath: ["32", "3206", "320682"],
+  },
+  {
+    id: "p21",
+    parkName: "启东沿海科创园 产业扶持政策",
+    summary: "支持海洋经济、装备制造与新能源项目，提供固定资产投资补贴与能耗协调支持。",
+    highlights: ["投资补贴", "能耗协调", "产业扶持"],
+    regionPath: ["32", "3206", "320681"],
+  },
+  {
+    id: "p22",
+    parkName: "海安高新区 智能制造专项",
+    summary: "聚焦智能制造与工业互联网，提供技改补贴、产学研合作与订单对接资源。",
+    highlights: ["技改补贴", "产学研", "订单对接"],
+    regionPath: ["32", "3206", "320685"],
+  },
+  {
+    id: "p23",
+    parkName: "南通市全域 OPC 通用服务指引",
+    summary: "市级层面办事入口与咨询热线汇总，适用于尚未明确园区的企业先行咨询（示例）。",
+    highlights: ["办事指引", "咨询热线", "全市适用"],
     regionPath: ["32", "3206"],
   },
 ];

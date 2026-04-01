@@ -1,20 +1,15 @@
 <script setup lang="ts">
-import { Modal, Pagination, Tag } from "ant-design-vue";
+import { Pagination, Tag } from "ant-design-vue";
 import { computed, ref, watch } from "vue";
-import { AI_CLASSROOM_VIDEOS, type AiClassroomVideoItem } from "../../data/aiClassroomVideos";
+import { useRouter } from "vue-router";
+import { AI_CLASSROOM_VIDEOS } from "../../data/aiClassroomVideos";
 
+const router = useRouter();
 const page = ref(1);
 const pageSize = ref(4);
-const playOpen = ref(false);
-const activeVideoId = ref<string | null>(null);
 const category = ref<
   "全部" | "产品实战" | "提示词工程" | "RAG知识库" | "部署优化" | "运营增长"
 >("全部");
-
-const activeVideo = computed<AiClassroomVideoItem | null>(() => {
-  if (!activeVideoId.value) return null;
-  return AI_CLASSROOM_VIDEOS.find((v) => v.id === activeVideoId.value) ?? null;
-});
 
 const filteredVideos = computed(() => {
   if (category.value === "全部") return AI_CLASSROOM_VIDEOS;
@@ -26,9 +21,8 @@ const pagedVideos = computed(() => {
   return filteredVideos.value.slice(start, start + pageSize.value);
 });
 
-function openVideo(id: string) {
-  activeVideoId.value = id;
-  playOpen.value = true;
+function openCourse(id: string) {
+  void router.push(`/ai-classroom/${id}`);
 }
 
 watch(category, () => {
@@ -78,9 +72,9 @@ watch(category, () => {
         class="video-card"
         role="button"
         tabindex="0"
-        @click="openVideo(item.id)"
-        @keydown.enter.prevent="openVideo(item.id)"
-        @keydown.space.prevent="openVideo(item.id)"
+        @click="openCourse(item.id)"
+        @keydown.enter.prevent="openCourse(item.id)"
+        @keydown.space.prevent="openCourse(item.id)"
       >
         <div class="cover-wrap">
           <img class="cover" :src="item.cover" :alt="item.title" loading="lazy" />
@@ -102,17 +96,6 @@ watch(category, () => {
       />
     </div>
 
-    <Modal
-      v-model:open="playOpen"
-      :title="activeVideo?.title || '视频播放'"
-      :footer="null"
-      width="900px"
-      @cancel="playOpen = false"
-    >
-      <div v-if="activeVideo" class="player-wrap">
-        <video class="player" :src="activeVideo.videoUrl" controls autoplay playsinline />
-      </div>
-    </Modal>
   </section>
 </template>
 
@@ -220,16 +203,5 @@ watch(category, () => {
   margin-top: 16px;
   display: flex;
   justify-content: flex-end;
-}
-
-.player-wrap {
-  border-radius: 10px;
-  overflow: hidden;
-}
-
-.player {
-  width: 100%;
-  max-height: 70vh;
-  background: #000;
 }
 </style>

@@ -1,16 +1,18 @@
 <script setup lang="ts">
-import { Cascader, Form, Input, Modal, message } from "ant-design-vue";
+import { Button, Form, Input, Modal, Tag, message } from "ant-design-vue";
 import { CalendarOutlined, EnvironmentOutlined, FileTextOutlined } from "@ant-design/icons-vue";
-import { computed, onBeforeUnmount, onMounted, reactive, ref } from "vue";
+import { computed, reactive, ref } from "vue";
+import { NT_POLICY_DISTRICT_FILTERS } from "../../data/ntPolicyDistrictFilters";
 import { OPC_COMMUNITY_EVENTS, type OpcCommunityEventItem } from "../../data/opcCommunityEvents";
-import { useOpcRegionDefaults } from "../../composables/useOpcRegionDefaults";
+import { useNtDistrictFilter } from "../../composables/useNtDistrictFilter";
+import { useOpcAppRegion } from "../../composables/useOpcAppRegion";
 import { useSubmitGuard } from "../../composables/useSubmitGuard";
-import { pathPrefixMatch, regionData } from "../../utils/regionMatch";
+import { pathPrefixMatch } from "../../utils/regionMatch";
 
-const { loadingGeo, geoError, loadIpRegionPath, readStoredAuth } = useOpcRegionDefaults();
-
-const regionValue = ref<string[]>([]);
-const initializing = ref(true);
+const { regionPath, regionReady } = useOpcAppRegion();
+const { ntDistrictFilter, isNantongContext, applyNtDistrictFilter } = useNtDistrictFilter(regionPath);
+const detailOpen = ref(false);
+const detailEvent = ref<OpcCommunityEventItem | null>(null);
 const registerOpen = ref(false);
 const activeEvent = ref<OpcCommunityEventItem | null>(null);
 const submitGuard = useSubmitGuard({ minIntervalMs: 800 });
@@ -23,54 +25,32 @@ const registerForm = reactive({
 });
 
 const filteredEvents = computed(() => {
-  const sel = Array.isArray(regionValue.value) ? regionValue.value : [];
-  if (sel.length === 0) return OPC_COMMUNITY_EVENTS;
-  return OPC_COMMUNITY_EVENTS.filter((item) => pathPrefixMatch(item.regionPath, sel));
+  const sel = Array.isArray(regionPath.value) ? regionPath.value : [];
+  const list =
+    sel.length === 0
+      ? OPC_COMMUNITY_EVENTS
+      : OPC_COMMUNITY_EVENTS.filter((item) => pathPrefixMatch(item.regionPath, sel));
+  return applyNtDistrictFilter(list);
 });
 
-const regionLabelText = computed(() => {
-  const v = Array.isArray(regionValue.value) ? regionValue.value : [];
-  if (v.length === 0) return "";
-  const parts: string[] = [];
-  let options = regionData as { label: string; value: string; children?: typeof regionData }[];
-  for (const code of v) {
-    const node = options.find((o) => o.value === code);
-    if (!node) break;
-    parts.push(node.label);
-    options = (node.children ?? []) as typeof options;
-  }
-  return parts.join(" · ");
-});
-
-async function initRegion() {
-  initializing.value = true;
-  const auth = readStoredAuth();
-  if (auth?.profile?.regionPath?.length) {
-    regionValue.value = [...auth.profile.regionPath];
-  } else {
-    regionValue.value = await loadIpRegionPath();
-  }
-  initializing.value = false;
+function openDetail(item: OpcCommunityEventItem) {
+  detailEvent.value = item;
+  detailOpen.value = true;
 }
 
-function onAuthChanged() {
-  const auth = readStoredAuth();
-  if (auth?.profile?.regionPath?.length) {
-    regionValue.value = [...auth.profile.regionPath];
-  }
+function closeDetail() {
+  detailOpen.value = false;
 }
-
-onMounted(() => {
-  void initRegion();
-  window.addEventListener("weopc-auth-changed", onAuthChanged);
-});
-
-onBeforeUnmount(() => {
-  window.removeEventListener("weopc-auth-changed", onAuthChanged);
-});
 
 function openRegister(item: OpcCommunityEventItem) {
   activeEvent.value = item;
+  registerOpen.value = true;
+}
+
+function openRegisterFromDetail() {
+  if (!detailEvent.value) return;
+  activeEvent.value = detailEvent.value;
+  detailOpen.value = false;
   registerOpen.value = true;
 }
 
@@ -102,21 +82,45 @@ async function submitRegister() {
   <section class="opc-events">
     <header class="head">
       <h1>OPC 社区活动</h1>
-      <p class="lead">根据地区自动绑定默认社区，展示当前可报名活动。</p>
+      <p class="lead">根据顶部「所在地区」展示当前区域可报名活动。</p>
 
-      <div class="toolbar">
-        <span class="toolbar-label">社区地区</span>
-        <Cascader v-model:value="regionValue" :options="regionData" :change-on-select="true" allow-clear
-          placeholder="省 / 市 / 区" class="region-cascader" :loading="initializing || loadingGeo" />
-        <span v-if="regionLabelText" class="region-hint">{{ regionLabelText }}</span>
+      <div v-if="regionReady && isNantongContext" class="district-toolbar" aria-label="南通区县筛选">
+        <span class="district-toolbar-label">区县筛选</span>
+        <div class="district-tags">
+          <Tag
+            class="district-tag"
+            :color="ntDistrictFilter === 'all' ? 'blue' : 'default'"
+            @click="ntDistrictFilter = 'all'"
+          >
+            全部
+          </Tag>
+          <Tag
+            v-for="d in NT_POLICY_DISTRICT_FILTERS"
+            :key="d.code"
+            class="district-tag"
+            :color="ntDistrictFilter === d.code ? 'blue' : 'default'"
+            @click="ntDistrictFilter = d.code"
+          >
+            {{ d.label }}
+          </Tag>
+        </div>
+        <p class="district-hint">开发区为南通经济技术开发区；全市活动在各区县筛选下均会显示。</p>
       </div>
-      <p v-if="geoError" class="geo-msg">{{ geoError }}</p>
     </header>
 
-    <div v-if="initializing" class="state">正在绑定默认社区…</div>
+    <div v-if="!regionReady" class="state">正在加载默认地区…</div>
 
     <div v-else class="card-grid">
-      <article v-for="item in filteredEvents" :key="item.id" class="event-card">
+      <article
+        v-for="item in filteredEvents"
+        :key="item.id"
+        class="event-card"
+        role="button"
+        tabindex="0"
+        @click="openDetail(item)"
+        @keydown.enter.prevent="openDetail(item)"
+        @keydown.space.prevent="openDetail(item)"
+      >
         <div class="event-card-content">
           <div class="period">
             <CalendarOutlined /> {{ item.period }}
@@ -129,13 +133,52 @@ async function submitRegister() {
             <FileTextOutlined style="margin-top: 5px;" /> {{ item.summary }}
           </p>
         </div>
-        <div class="apply-btn" @click="openRegister(item)">
+        <div class="apply-btn" @click.stop="openRegister(item)">
           立即报名
         </div>
       </article>
     </div>
 
-    <p v-if="!initializing && !filteredEvents.length" class="state empty">当前地区暂无活动，请切换地区查看。</p>
+    <p v-if="regionReady && !filteredEvents.length" class="state empty">
+      当前筛选下暂无活动，可切换顶部地区或区县筛选查看。
+    </p>
+
+    <Modal
+      v-model:open="detailOpen"
+      :title="detailEvent?.title || '活动详情'"
+      :footer="null"
+      width="640px"
+      :mask-closable="true"
+      @cancel="closeDetail"
+    >
+      <div v-if="detailEvent" class="detail-wrap">
+        <div class="detail-meta">
+          <div class="detail-line">
+            <CalendarOutlined class="detail-icon icon-time" />
+            <span>{{ detailEvent.period }}</span>
+          </div>
+          <div v-if="detailEvent.subtitle" class="detail-subtitle">{{ detailEvent.subtitle }}</div>
+        </div>
+        <div class="detail-block">
+          <div class="detail-label">活动地址</div>
+          <div class="detail-text icon-line">
+            <EnvironmentOutlined class="detail-icon icon-addr" />
+            {{ detailEvent.address }}
+          </div>
+        </div>
+        <div class="detail-block">
+          <div class="detail-label">活动介绍</div>
+          <div class="detail-summary">
+            <FileTextOutlined class="detail-icon icon-doc" />
+            <span>{{ detailEvent.summary }}</span>
+          </div>
+        </div>
+        <div class="detail-footer">
+          <Button @click="closeDetail">关闭</Button>
+          <Button type="primary" @click="openRegisterFromDetail">立即报名</Button>
+        </div>
+      </div>
+    </Modal>
 
     <Modal
       v-model:open="registerOpen"
@@ -180,17 +223,14 @@ async function submitRegister() {
 }
 
 .lead {
-  margin: 0 0 20px;
+  margin: 0 0 16px;
   color: #64748b;
   font-size: 14px;
   line-height: 1.6;
 }
 
-.toolbar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 12px 16px;
+.district-toolbar {
+  margin-top: 4px;
   padding: 14px 16px;
   background: rgba(255, 255, 255, 0.72);
   border: 1px solid rgba(226, 232, 240, 0.9);
@@ -198,25 +238,31 @@ async function submitRegister() {
   box-shadow: 0 4px 18px rgba(15, 23, 42, 0.06);
 }
 
-.toolbar-label {
+.district-toolbar-label {
+  display: block;
   font-size: 13px;
   font-weight: 600;
   color: #334155;
+  margin-bottom: 10px;
 }
 
-.region-cascader {
-  min-width: min(100%, 320px);
+.district-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
-.region-hint {
-  font-size: 12px;
-  color: #64748b;
+.district-tag {
+  margin: 0;
+  cursor: pointer;
+  user-select: none;
 }
 
-.geo-msg {
+.district-hint {
   margin: 10px 0 0;
   font-size: 12px;
-  color: #b45309;
+  color: #94a3b8;
+  line-height: 1.5;
 }
 
 .card-grid {
@@ -236,6 +282,18 @@ async function submitRegister() {
   display: flex;
   flex-direction: column;
   justify-content: space-between;
+  cursor: pointer;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.event-card:hover {
+  border-color: #cbd5e1;
+  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.08);
+}
+
+.event-card:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
 }
 
 .period {
@@ -306,14 +364,96 @@ async function submitRegister() {
   padding: 28px 12px;
 }
 
-@media (max-width: 640px) {
-  .toolbar {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .region-cascader {
-    width: 100%;
-  }
+.detail-wrap {
+  display: grid;
+  gap: 16px;
 }
+
+.detail-meta {
+  padding: 12px 14px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+}
+
+.detail-line {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 13px;
+  color: #334155;
+  line-height: 1.5;
+}
+
+.detail-subtitle {
+  margin-top: 8px;
+  font-size: 13px;
+  color: #64748b;
+}
+
+.detail-block {
+  font-size: 14px;
+}
+
+.detail-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #64748b;
+  margin-bottom: 6px;
+}
+
+.detail-text {
+  color: #334155;
+  line-height: 1.65;
+}
+
+.icon-line {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.detail-summary {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  font-size: 13px;
+  color: #475569;
+  line-height: 1.65;
+}
+
+.detail-summary span {
+  flex: 1;
+  min-width: 0;
+}
+
+.detail-icon {
+  flex-shrink: 0;
+  margin-top: 2px;
+  font-size: 15px;
+}
+
+.icon-time {
+  color: #8b5cf6;
+}
+
+.icon-addr {
+  color: #10b981;
+}
+
+.icon-doc {
+  color: #2563eb;
+}
+
+.detail-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding-top: 4px;
+}
+
 </style>
