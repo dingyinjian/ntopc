@@ -1,10 +1,15 @@
 <script setup lang="ts">
-import { Cascader } from "ant-design-vue";
+import { Cascader, message } from "ant-design-vue";
 import { EnvironmentOutlined } from "@ant-design/icons-vue";
 import { useOpcAppRegion } from "../composables/useOpcAppRegion";
 import { regionData } from "../utils/regionMatch";
 
-const { regionPath, regionLabelText, loadingGeo, geoError } = useOpcAppRegion();
+const { regionPath, regionLabelText, loadingGeo, geoError, restoreUserRegion } = useOpcAppRegion();
+
+function onRestoreRegion() {
+  restoreUserRegion();
+  message.success("已恢复为您的默认地区");
+}
 </script>
 
 <template>
@@ -13,6 +18,7 @@ const { regionPath, regionLabelText, loadingGeo, geoError } = useOpcAppRegion();
       <EnvironmentOutlined />
     </span>
     <span class="bar-label">所在地区</span>
+    <button type="button" class="restore-region-btn" @click="onRestoreRegion">恢复我的地区</button>
     <Cascader
       v-model:value="regionPath"
       :options="regionData"
@@ -69,6 +75,28 @@ const { regionPath, regionLabelText, loadingGeo, geoError } = useOpcAppRegion();
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.restore-region-btn {
+  flex-shrink: 0;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #0f766e;
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  border-radius: 8px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.restore-region-btn:hover {
+  background: #d1fae5;
+  border-color: #6ee7b7;
+}
+
+.restore-region-btn:active {
+  background: #a7f3d0;
 }
 
 @media (max-width: 480px) {

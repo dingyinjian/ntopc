@@ -1,30 +1,21 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
 import { Checkbox as ACheckbox } from "ant-design-vue";
-import { writeAuthWithMockRegion } from "../composables/useOpcRegionDefaults";
+import { DEFAULT_APP_REGION_PATH, writeAuthWithMockRegion } from "../composables/useOpcRegionDefaults";
 
 const props = defineProps<{
   visible: boolean;
-  mode: "login" | "register";
 }>();
 
 const emit = defineEmits<{
   close: [];
 }>();
 
-const formMode = ref<"login" | "register">(props.mode);
 const phone = ref("");
 const code = ref("");
 const agreed = ref(false);
 const sending = ref(false);
 const countdown = ref(0);
-
-watch(
-  () => props.mode,
-  (nextMode) => {
-    formMode.value = nextMode;
-  }
-);
 
 watch(
   () => props.visible,
@@ -39,23 +30,15 @@ watch(
   }
 );
 
-const title = computed(() => (formMode.value === "login" ? "欢迎登录" : "注册会员"));
-const subtitle = computed(() =>
-  formMode.value === "login"
-    ? "手机号验证码登录，更安全更便捷"
-    : "无需单独页面，直接完成注册并登录"
-);
-const submitText = computed(() => (formMode.value === "login" ? "立即登录" : "注册并登录"));
+const title = computed(() => "欢迎登录");
+const subtitle = computed(() => "手机号验证码登录，更安全更便捷");
+const submitText = computed(() => "立即登录");
 
 const canSend = computed(() => /^1\d{10}$/.test(phone.value) && countdown.value === 0 && !sending.value);
 const canSubmit = computed(() => /^1\d{10}$/.test(phone.value) && /^\d{4,6}$/.test(code.value) && agreed.value);
 
 function closeModal() {
   emit("close");
-}
-
-function switchMode(mode: "login" | "register") {
-  formMode.value = mode;
 }
 
 function openAgreement() {
@@ -84,7 +67,7 @@ function sendCode() {
 function submitAuth() {
   if (!canSubmit.value) return;
   /** 接入后端后替换为接口返回的 profile.regionPath */
-  writeAuthWithMockRegion(phone.value, ["33", "3301", "330106"]);
+  writeAuthWithMockRegion(phone.value, [...DEFAULT_APP_REGION_PATH]);
   window.dispatchEvent(new CustomEvent("weopc-auth-changed"));
   closeModal();
 }
@@ -98,11 +81,6 @@ function submitAuth() {
           <button class="close-btn" type="button" aria-label="关闭" @click="closeModal">×</button>
           <h3>{{ title }}</h3>
           <p class="sub">{{ subtitle }}</p>
-
-          <div class="mode-switch">
-            <button type="button" :class="{ active: formMode === 'login' }" @click="switchMode('login')">登录</button>
-            <button type="button" :class="{ active: formMode === 'register' }" @click="switchMode('register')">注册</button>
-          </div>
 
           <label class="field">
             <span>手机号</span>
@@ -176,31 +154,6 @@ h3 {
   margin: 8px 0 14px;
   color: #6b7280;
   font-size: 13px;
-}
-
-.mode-switch {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
-  margin-bottom: 14px;
-  background: #f3f4f6;
-  border-radius: 10px;
-  padding: 4px;
-}
-
-.mode-switch button {
-  border: none;
-  height: 34px;
-  border-radius: 8px;
-  background: transparent;
-  color: #374151;
-  cursor: pointer;
-}
-
-.mode-switch button.active {
-  background: #ffffff;
-  color: #111827;
-  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.08);
 }
 
 .field {

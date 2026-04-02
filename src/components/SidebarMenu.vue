@@ -27,19 +27,19 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   navigate: [path: string];
-  auth: [mode: "login" | "register"];
+  auth: [];
 }>();
 
 function onNavigate(path: string) {
-  if (path === "/compute-service" || path === "/agent-plaza") {
+  if (path === "/compute-service") {
     window.open("https://ai.guxuan.cloud/", "_blank", "noopener,noreferrer");
     return;
   }
   emit("navigate", path);
 }
 
-function openAuth(mode: "login" | "register") {
-  emit("auth", mode);
+function openAuth() {
+  emit("auth");
 }
 
 function isNavActive(path: string) {
@@ -114,8 +114,7 @@ const navTargetsWithIcons = computed(() =>
     </nav>
 
     <div class="auth">
-      <button type="button" class="btn ghost" @click="openAuth('login')">登录</button>
-      <button type="button" class="btn" @click="openAuth('register')">注册会员</button>
+      <button type="button" class="btn" @click="openAuth">登录</button>
     </div>
   </aside>
 </template>

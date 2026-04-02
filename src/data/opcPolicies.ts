@@ -8,6 +8,8 @@ export interface OpcPolicyItem {
   contact?: string;
   sourceName?: string;
   sourceUrl?: string;
+  /** 园区在地图上的精确位置（GCJ-02，与高德一致）；不填则按省市中心推算示意点 */
+  parkMap?: { lng: number; lat: number };
   /** 省→市→区 或 省→区（直辖市） */
   regionPath: string[];
 }
@@ -129,6 +131,8 @@ export const OPC_POLICIES: OpcPolicyItem[] = [
     highlights: ["场地支持", "设备共享", "产业对接"],
     sourceName: "南通开发区政策公告（示例）",
     sourceUrl: "https://example.com/policy/nt-01",
+    // 南通经济技术开发区一带示意坐标（GCJ-02），精确位置可改 parkMap
+    parkMap: { lng: 120.8682, lat: 32.0154 },
     regionPath: ["32", "3206", "320671"],
   },
   {

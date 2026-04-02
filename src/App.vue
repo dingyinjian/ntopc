@@ -13,7 +13,6 @@ const route = useRoute();
 const router = useRouter();
 const menuOpen = ref(false);
 const authVisible = ref(false);
-const authMode = ref<"login" | "register">("login");
 const appTitle = defaultHomeData?.meta?.title ?? "WeOPC";
 const appSubtitle = defaultHomeData?.meta?.subtitle ?? "全国一站式OPC服务平台";
 const navTargets = computed(() => navItems);
@@ -43,8 +42,7 @@ function navigateTo(path: string) {
   menuOpen.value = false;
 }
 
-function openAuth(mode: "login" | "register") {
-  authMode.value = mode;
+function openAuth() {
   authVisible.value = true;
 }
 
@@ -119,7 +117,7 @@ onBeforeUnmount(() => {
         </div>
       </div>
     </main>
-    <AuthModal :visible="authVisible" :mode="authMode" @close="closeAuth" />
+    <AuthModal :visible="authVisible" @close="closeAuth" />
   </div>
 </template>
 

@@ -42,8 +42,21 @@ export function writeAuthWithMockRegion(phone: string, regionPath: string[]) {
   localStorage.setItem(WEOPC_AUTH_STORAGE_KEY, JSON.stringify(payload));
 }
 
-// 默认地区：江苏省·南通市（省+市两级；若选择区县则由用户/定位结果补全）
-const DEFAULT_FALLBACK_PATH = ["32", "3206"];
+/** 默认地区：江苏省·南通市（省+市两级；区县由用户在 Cascader 中选择） */
+export const DEFAULT_APP_REGION_PATH = ["32", "3206"];
+
+/**
+ * 演示用：若本地尚无登录信息，则写入示例账号（与 AuthModal 成功登录示例一致）。
+ * 正式环境不需要时可在 .env 设置 `VITE_DEMO_LOGIN=false`。
+ */
+export function seedDemoAuthIfEmpty() {
+  if (typeof localStorage === "undefined") return;
+  if (import.meta.env.VITE_DEMO_LOGIN === "false") return;
+  if (localStorage.getItem(WEOPC_AUTH_STORAGE_KEY)) return;
+  writeAuthWithMockRegion("13800138000", [...DEFAULT_APP_REGION_PATH]);
+}
+
+const DEFAULT_FALLBACK_PATH = DEFAULT_APP_REGION_PATH;
 
 export function useOpcRegionDefaults() {
   function parseRectangleCenter(rectangle: string | undefined): { lng: number; lat: number } | null {

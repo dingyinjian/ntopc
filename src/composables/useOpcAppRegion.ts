@@ -1,13 +1,13 @@
 import { computed, ref } from "vue";
 import { regionData } from "../utils/regionMatch";
-import { useOpcRegionDefaults } from "./useOpcRegionDefaults";
+import { DEFAULT_APP_REGION_PATH, useOpcRegionDefaults } from "./useOpcRegionDefaults";
 
 /** 全站当前选中的省市区（与 element-china-area-data Cascader value 一致） */
 const regionPath = ref<string[]>([]);
 const regionReady = ref(false);
 
 export function useOpcAppRegion() {
-  const { loadIpRegionPath, readStoredAuth, loadingGeo, geoError } = useOpcRegionDefaults();
+  const { readStoredAuth, loadingGeo, geoError } = useOpcRegionDefaults();
 
   const regionLabelText = computed(() => {
     const v = Array.isArray(regionPath.value) ? regionPath.value : [];
@@ -28,8 +28,11 @@ export function useOpcAppRegion() {
     if (auth?.profile?.regionPath?.length) {
       regionPath.value = [...auth.profile.regionPath];
     } else {
-      regionPath.value = await loadIpRegionPath();
+      // 不按 IP/定位初始化，默认南通市（省+市）
+      geoError.value = null;
+      regionPath.value = [...DEFAULT_APP_REGION_PATH];
     }
+    loadingGeo.value = false;
     regionReady.value = true;
   }
 
@@ -38,10 +41,15 @@ export function useOpcAppRegion() {
     if (auth?.profile?.regionPath?.length) {
       regionPath.value = [...auth.profile.regionPath];
     } else {
-      void loadIpRegionPath().then((p) => {
-        regionPath.value = p;
-      });
+      geoError.value = null;
+      regionPath.value = [...DEFAULT_APP_REGION_PATH];
     }
+    loadingGeo.value = false;
+  }
+
+  /** 恢复为当前用户档案中的地区；未登录或无档案时为站点默认（南通市） */
+  function restoreUserRegion() {
+    onAuthChanged();
   }
 
   return {
@@ -52,5 +60,6 @@ export function useOpcAppRegion() {
     geoError,
     bootstrap,
     onAuthChanged,
+    restoreUserRegion,
   };
 }

@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import { PhoneOutlined } from "@ant-design/icons-vue";
-import { Button, Modal, Tag, Typography } from "ant-design-vue";
+import { Button, Modal, Tag } from "ant-design-vue";
 import { computed, ref } from "vue";
 import { useRouter } from "vue-router";
+import PolicyParkMap from "../../components/PolicyParkMap.vue";
 import { NT_POLICY_DISTRICT_FILTERS } from "../../data/ntPolicyDistrictFilters";
 import { OPC_POLICIES } from "../../data/opcPolicies";
 import { useNtDistrictFilter } from "../../composables/useNtDistrictFilter";
+import { getPolicyParkPosition } from "../../utils/policyParkPosition";
 import { useOpcAppRegion } from "../../composables/useOpcAppRegion";
 import { pathPrefixMatch } from "../../utils/regionMatch";
 
@@ -18,6 +20,76 @@ const activePolicyId = ref<string | null>(null);
 const activePolicy = computed(() => {
   if (!activePolicyId.value) return null;
   return OPC_POLICIES.find((p) => p.id === activePolicyId.value) ?? null;
+});
+
+function firstHighlight(highlights: string[] | undefined): string {
+  return highlights?.[0] || "政策支持";
+}
+
+const activeHighlights = computed(() => activePolicy.value?.highlights ?? []);
+
+const parkMapPosition = computed(() => {
+  const p = activePolicy.value;
+  if (!p) return null;
+  return getPolicyParkPosition(p);
+});
+
+function uniqById<T extends { id: string }>(items: T[]): T[] {
+  const seen = new Set<string>();
+  const out: T[] = [];
+  for (const x of items) {
+    if (seen.has(x.id)) continue;
+    seen.add(x.id);
+    out.push(x);
+  }
+  return out;
+}
+
+function byRegionPrefix(prefix: string[]) {
+  if (!prefix.length) return [];
+  return OPC_POLICIES.filter((p) => pathPrefixMatch(p.regionPath, prefix));
+}
+
+const policyLayers = computed(() => {
+  const sel = Array.isArray(regionPath.value) ? regionPath.value : [];
+  const province = sel[0] ? [sel[0]] : [];
+  const city = sel[0] && sel[1] ? [sel[0], sel[1]] : [];
+  const district = sel[0] && sel[1] && sel[2] ? [sel[0], sel[1], sel[2]] : [];
+
+  const park = activePolicy.value ? [activePolicy.value] : [];
+  const districtList = district.length ? byRegionPrefix(district) : [];
+  const cityList = city.length ? byRegionPrefix(city) : [];
+  const provinceList = province.length ? byRegionPrefix(province) : [];
+
+  // 去重：园区政策优先展示在第一块
+  const parkIds = new Set(park.map((x) => x.id));
+  const districtDedup = uniqById(districtList.filter((x) => !parkIds.has(x.id)));
+  const cityDedup = uniqById(cityList.filter((x) => !parkIds.has(x.id)));
+  const provinceDedup = uniqById(provinceList.filter((x) => !parkIds.has(x.id)));
+
+  return {
+    sel,
+    park,
+    district: districtDedup,
+    city: cityDedup,
+    province: provinceDedup,
+  };
+});
+
+const policyListItems = computed(() => {
+  const park = policyLayers.value.park.map((p) => ({ ...p, level: "园区政策" as const }));
+  const city = policyLayers.value.city.map((p) => ({ ...p, level: "市级政策" as const }));
+  const province = policyLayers.value.province.map((p) => ({ ...p, level: "省级政策" as const }));
+
+  const merged = [...park, ...city, ...province];
+  const seen = new Set<string>();
+  const out: Array<(typeof merged)[number]> = [];
+  for (const item of merged) {
+    if (seen.has(item.id)) continue;
+    seen.add(item.id);
+    out.push(item);
+  }
+  return out;
 });
 
 const filteredPolicies = computed(() => {
@@ -115,35 +187,43 @@ function goToSettlement() {
     >
       <div v-if="activePolicy" class="policy-detail">
         <div class="detail-block">
-          <div class="detail-title">政策概述</div>
           <div class="detail-text">{{ activePolicy.summary }}</div>
         </div>
 
-        <div v-if="activePolicy.details" class="detail-block">
-          <div class="detail-title">政策详细</div>
-          <pre class="detail-pre">{{ activePolicy.details }}</pre>
-        </div>
-
         <div class="detail-block">
-          <div class="detail-title">政策亮点</div>
+          <div class="detail-title">园区特色</div>
           <div class="tag-row">
-            <Tag v-for="(h, i) in activePolicy.highlights" :key="i" color="geekblue">{{ h }}</Tag>
+            <Tag v-for="name in activeHighlights" :key="name" color="geekblue">{{ name }}</Tag>
           </div>
         </div>
 
         <div class="detail-block">
-          <div class="detail-title">信息来源</div>
-          <div class="detail-text">
-            <Typography.Link
-              v-if="activePolicy.sourceUrl"
-              :href="activePolicy.sourceUrl"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              {{ activePolicy.sourceName || activePolicy.sourceUrl }}
-            </Typography.Link>
-            <span v-else>—</span>
-          </div>
+          <div class="detail-title">政策列表</div>
+          <ul class="policy-list">
+            <li v-for="p in policyListItems" :key="p.id" class="policy-item">
+              <div class="policy-left">
+                <div class="policy-headline">
+                  <div class="policy-tags">
+                    <Tag color="blue">{{ firstHighlight(p.highlights) }}</Tag>
+                  </div>
+                  <a
+                    v-if="p.sourceUrl"
+                    class="policy-link"
+                    :href="p.sourceUrl"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    {{ p.parkName }}
+                  </a>
+                  <span v-else class="policy-link muted-link">{{ p.parkName }}</span>
+                </div>
+                <p class="policy-summary">{{ p.summary }}</p>
+              </div>
+              <Tag :color="p.level === '园区政策' ? 'purple' : p.level === '市级政策' ? 'green' : 'orange'">
+                {{ p.level }}
+              </Tag>
+            </li>
+          </ul>
         </div>
 
         <div class="detail-block">
@@ -151,6 +231,15 @@ function goToSettlement() {
           <div class="detail-text contact-detail">
             <PhoneOutlined class="contact-icon" />
             {{ getContactText(activePolicy.contact) }}
+          </div>
+          <div v-if="parkMapPosition" class="park-map-wrap">
+            <div class="detail-subtitle">园区地图定位</div>
+            <PolicyParkMap
+              :key="activePolicy.id"
+              :lng="parkMapPosition.lng"
+              :lat="parkMapPosition.lat"
+              :title="activePolicy.parkName"
+            />
           </div>
         </div>
 
@@ -326,10 +415,30 @@ function goToSettlement() {
   color: #0f172a;
 }
 
+.detail-subtitle {
+  margin-top: 4px;
+  margin-bottom: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #475569;
+}
+
+.park-map-wrap {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid #e2e8f0;
+}
+
 .detail-text {
   font-size: 13px;
   line-height: 1.7;
   color: #334155;
+}
+
+.detail-name {
+  font-size: 16px;
+  font-weight: 700;
+  color: #0f172a;
 }
 
 .detail-pre {
@@ -355,6 +464,96 @@ function goToSettlement() {
   display: flex;
   justify-content: flex-end;
   padding-top: 6px;
+}
+
+.layer-list {
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 10px;
+}
+
+.layer-item {
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  display: grid;
+  gap: 6px;
+}
+
+.layer-name {
+  font-size: 13px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.policy-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 12px;
+  max-height: 300px;
+  overflow-y: auto;
+  padding-right: 6px;
+}
+
+.policy-item {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+}
+
+.policy-left {
+  min-width: 0;
+  flex: 1;
+  display: grid;
+  gap: 8px;
+}
+
+.policy-headline {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.policy-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.policy-link {
+  color: #2563eb;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.5;
+  text-decoration: none;
+  word-break: break-word;
+}
+
+.policy-link:hover {
+  text-decoration: underline;
+}
+
+.muted-link {
+  color: #64748b;
+  cursor: default;
+}
+
+.policy-summary {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.6;
+  color: #64748b;
 }
 
 </style>
