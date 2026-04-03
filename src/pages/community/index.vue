@@ -1,14 +1,17 @@
 <script setup lang="ts">
-import { Button, Form, Input, Modal, Pagination, message } from "ant-design-vue";
+import { Button, Form, Input, Modal, Pagination, Segmented, Upload, message } from "ant-design-vue";
+import type { UploadFile } from "ant-design-vue";
 import {
   ClockCircleOutlined,
   CommentOutlined,
+  PaperClipOutlined,
   PlusOutlined,
   UserOutlined,
 } from "@ant-design/icons-vue";
-import { computed, reactive, ref, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
 import { useSubmitGuard } from "../../composables/useSubmitGuard";
 import { useCommunityQA } from "../../composables/useCommunityQA";
+import { readStoredAuth } from "../../composables/useOpcRegionDefaults";
 import type { CommunityQuestion } from "../../data/communityQA";
 
 const { questions, addQuestion, addAnswer, answerCountFor, answersForQuestion } = useCommunityQA();
@@ -18,6 +21,16 @@ const detailOpen = ref(false);
 const activeQuestion = ref<CommunityQuestion | null>(null);
 const askGuard = useSubmitGuard({ minIntervalMs: 800 });
 const answerGuard = useSubmitGuard({ minIntervalMs: 800 });
+
+const listScope = ref<"all" | "mine">("all");
+const authTick = ref(0);
+
+function currentPhone() {
+  authTick.value;
+  return readStoredAuth()?.phone;
+}
+const uploadList = ref<UploadFile[]>([]);
+const attachmentPayload = ref<{ uid: string; name: string; url: string }[]>([]);
 
 const askForm = reactive({
   title: "",
@@ -35,20 +48,45 @@ const sortedQuestions = computed(() => {
   );
 });
 
+const visibleQuestions = computed(() => {
+  if (listScope.value === "mine") {
+    const phone = currentPhone();
+    if (!phone) return [];
+    return sortedQuestions.value.filter((q) => q.authorPhone === phone);
+  }
+  return sortedQuestions.value;
+});
+
 const pagedQuestions = computed(() => {
-  const list = sortedQuestions.value;
+  const list = visibleQuestions.value;
   const start = (page.value - 1) * pageSize.value;
   return list.slice(start, start + pageSize.value);
 });
 
 watch(
-  sortedQuestions,
+  visibleQuestions,
   (list) => {
     const maxPage = Math.max(1, Math.ceil(list.length / pageSize.value) || 1);
     if (page.value > maxPage) page.value = maxPage;
   },
   { deep: true }
 );
+
+watch(listScope, () => {
+  page.value = 1;
+});
+
+function onAuthTick() {
+  authTick.value++;
+}
+
+onMounted(() => {
+  window.addEventListener("weopc-auth-changed", onAuthTick);
+});
+
+onBeforeUnmount(() => {
+  window.removeEventListener("weopc-auth-changed", onAuthTick);
+});
 
 function formatTime(iso: string): string {
   try {
@@ -68,7 +106,33 @@ function formatTime(iso: string): string {
 function openAsk() {
   askForm.title = "";
   askForm.content = "";
+  uploadList.value = [];
+  attachmentPayload.value = [];
   askOpen.value = true;
+}
+
+function beforeUploadAttachment(file: File) {
+  if (attachmentPayload.value.length >= 5) {
+    message.warning("最多上传 5 个附件");
+    return false;
+  }
+  if (file.size > 5 * 1024 * 1024) {
+    message.error(`「${file.name}」超过 5MB`);
+    return false;
+  }
+  const uid = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+  const reader = new FileReader();
+  reader.onload = () => {
+    attachmentPayload.value.push({ uid, name: file.name, url: String(reader.result) });
+    uploadList.value = [...uploadList.value, { uid, name: file.name, status: "done" }];
+  };
+  reader.readAsDataURL(file);
+  return false;
+}
+
+function onRemoveUpload(file: UploadFile) {
+  attachmentPayload.value = attachmentPayload.value.filter((x) => x.uid !== file.uid);
+  uploadList.value = uploadList.value.filter((x) => x.uid !== file.uid);
 }
 
 function closeAsk() {
@@ -77,12 +141,24 @@ function closeAsk() {
 
 async function submitAsk() {
   await askGuard.run(async () => {
+    if (!currentPhone()) {
+      message.warning("请先登录后再发布");
+      throw new Error("auth");
+    }
     if (!askForm.title.trim()) return message.warning("请填写标题");
     if (!askForm.content.trim()) return message.warning("请填写问题内容");
-    addQuestion(askForm.title, askForm.content);
+    if (attachmentPayload.value.length === 0) return message.warning("请上传至少一个附件");
+    addQuestion(
+      askForm.title,
+      askForm.content,
+      attachmentPayload.value.map(({ name, url }) => ({ name, url }))
+    );
     message.success("发布成功");
     askOpen.value = false;
+    uploadList.value = [];
+    attachmentPayload.value = [];
     page.value = 1;
+    listScope.value = "mine";
   });
 }
 
@@ -130,6 +206,19 @@ const detailAnswers = computed(() => {
           发布提问
         </Button>
       </div>
+      <div class="scope-bar">
+        <span class="scope-label">列表</span>
+        <Segmented
+          v-model:value="listScope"
+          :options="[
+            { label: '全部', value: 'all' },
+            { label: '我的发布', value: 'mine' },
+          ]"
+        />
+        <p v-if="listScope === 'mine' && !currentPhone()" class="scope-hint">
+          请先登录后查看「我的发布」。
+        </p>
+      </div>
     </header>
 
     <div class="question-list">
@@ -165,7 +254,7 @@ const detailAnswers = computed(() => {
     <div class="pager">
       <Pagination
         v-model:current="page"
-        :total="sortedQuestions.length"
+        :total="visibleQuestions.length"
         :page-size="pageSize"
         :show-size-changer="false"
         :show-total="(total) => `共 ${total} 条`"
@@ -192,6 +281,21 @@ const detailAnswers = computed(() => {
             placeholder="请描述背景、已尝试的方案或具体困惑"
           />
         </Form.Item>
+        <Form.Item label="附件" required>
+          <Upload
+            v-model:file-list="uploadList"
+            :before-upload="beforeUploadAttachment"
+            :max-count="5"
+            multiple
+            @remove="onRemoveUpload"
+          >
+            <Button type="default">
+              <PaperClipOutlined />
+              选择文件（最多 5 个，单文件 ≤ 5MB）
+            </Button>
+          </Upload>
+          <p class="upload-hint">发布问题需上传至少一个附件（演示：文件保存在本机浏览器）。</p>
+        </Form.Item>
       </Form>
     </Modal>
 
@@ -210,6 +314,18 @@ const detailAnswers = computed(() => {
           <span><CommentOutlined /> 共 {{ answerCountFor(activeQuestion.id) }} 条回答</span>
         </div>
         <div class="detail-body">{{ activeQuestion.content }}</div>
+
+        <div v-if="activeQuestion.attachments?.length" class="attach-block">
+          <div class="attach-label">附件</div>
+          <ul class="attach-list">
+            <li v-for="(att, idx) in activeQuestion.attachments" :key="idx">
+              <a :href="att.url" :download="att.name" target="_blank" rel="noopener noreferrer">
+                <PaperClipOutlined />
+                {{ att.name }}
+              </a>
+            </li>
+          </ul>
+        </div>
 
         <div class="answers-head">回答</div>
         <ul v-if="detailAnswers.length" class="answer-list">
@@ -254,6 +370,66 @@ const detailAnswers = computed(() => {
   align-items: flex-start;
   gap: 16px;
   flex-wrap: wrap;
+}
+
+.scope-bar {
+  margin-top: 16px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+  padding: 12px 14px;
+  background: rgba(255, 255, 255, 0.75);
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+}
+
+.scope-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #334155;
+}
+
+.scope-hint {
+  margin: 0;
+  width: 100%;
+  font-size: 12px;
+  color: #b45309;
+}
+
+.upload-hint {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: #94a3b8;
+}
+
+.attach-block {
+  padding: 12px 0;
+  border-top: 1px solid #e2e8f0;
+}
+
+.attach-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #334155;
+  margin-bottom: 8px;
+}
+
+.attach-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 8px;
+}
+
+.attach-list a {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #2563eb;
+  font-size: 13px;
+  word-break: break-all;
 }
 
 .head h1 {

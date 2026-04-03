@@ -1,9 +1,33 @@
 <script setup lang="ts">
-import { Button, Form, Input, Modal, Select, Tag, message } from "ant-design-vue";
+import { Button, Form, Input, Modal, Select, Segmented, Tag, message } from "ant-design-vue";
 import { CalendarOutlined, DollarCircleOutlined, EnvironmentOutlined, PhoneOutlined, PlusOutlined } from "@ant-design/icons-vue";
-import { computed, reactive, ref } from "vue";
+import { computed, onBeforeUnmount, onMounted, reactive, ref } from "vue";
 import { DEMAND_CATEGORIES, DEMAND_LIST, type DemandCategory } from "../../data/demandItems";
+import { useDemandUser } from "../../composables/useDemandUser";
+import { readStoredAuth } from "../../composables/useOpcRegionDefaults";
 import { useSubmitGuard } from "../../composables/useSubmitGuard";
+
+const { myPublishes, myOrders, addPublish, addOrder } = useDemandUser();
+
+const listTab = ref<"all" | "mine_publish" | "mine_order">("all");
+const authTick = ref(0);
+
+function currentPhone() {
+  authTick.value;
+  return readStoredAuth()?.phone;
+}
+
+function onAuthTick() {
+  authTick.value++;
+}
+
+onMounted(() => {
+  window.addEventListener("weopc-auth-changed", onAuthTick);
+});
+
+onBeforeUnmount(() => {
+  window.removeEventListener("weopc-auth-changed", onAuthTick);
+});
 
 const filter = reactive({
   keyword: "",
@@ -35,9 +59,18 @@ const applyForm = reactive({
   eta: "",
 });
 
+const mergedDemands = computed(() => [...myPublishes.value, ...DEMAND_LIST]);
+
 const filteredDemands = computed(() => {
   const k = filter.keyword.trim().toLowerCase();
-  return DEMAND_LIST.filter((item) => {
+  let base = mergedDemands.value;
+  if (listTab.value === "mine_publish") {
+    base = myPublishes.value;
+  } else if (listTab.value === "mine_order") {
+    const ids = new Set(myOrders.value.map((o) => o.demandId));
+    base = mergedDemands.value.filter((d) => ids.has(d.id));
+  }
+  return base.filter((item) => {
     const byCategory = filter.category === "全部" || item.category === filter.category;
     const byKeyword =
       !k ||
@@ -61,7 +94,7 @@ function closeDetail() {
 
 const detailDemand = computed(() => {
   if (!detailDemandId.value) return null;
-  return DEMAND_LIST.find((d) => d.id === detailDemandId.value) ?? null;
+  return mergedDemands.value.find((d) => d.id === detailDemandId.value) ?? null;
 });
 
 function acceptOrder(id: string) {
@@ -71,7 +104,7 @@ function acceptOrder(id: string) {
 
 const applyingDemand = computed(() => {
   if (!applyingDemandId.value) return null;
-  return DEMAND_LIST.find((d) => d.id === applyingDemandId.value) ?? null;
+  return mergedDemands.value.find((d) => d.id === applyingDemandId.value) ?? null;
 });
 
 function fromDetailToApply() {
@@ -90,9 +123,22 @@ function resetApplyForm() {
 
 async function submitApply() {
   await applyGuard.run(async () => {
+    if (!currentPhone()) {
+      message.warning("请先登录后再接单");
+      throw new Error("auth");
+    }
     if (!applyForm.intro.trim()) return message.warning("请填写自我介绍");
     if (!applyForm.quote.trim()) return message.warning("请填写报价");
     if (!applyForm.eta.trim()) return message.warning("请填写预计交付时间");
+    const d = applyingDemand.value;
+    if (!d) return;
+    addOrder({
+      demandId: d.id,
+      demandTitle: d.title,
+      intro: applyForm.intro.trim(),
+      quote: applyForm.quote.trim(),
+      eta: applyForm.eta.trim(),
+    });
     message.success("申请已提交（示例）");
     applyOpen.value = false;
     resetApplyForm();
@@ -112,6 +158,10 @@ function resetPublishForm() {
 
 async function submitPublish() {
   await submitGuard.run(async () => {
+    if (!currentPhone()) {
+      message.warning("请先登录后再发布需求");
+      throw new Error("auth");
+    }
     if (!publishForm.title.trim()) return message.warning("请填写需求标题");
     if (!publishForm.subtitle.trim()) return message.warning("请填写需求副标题");
     if (!publishForm.details.trim()) return message.warning("请填写具体需求详情");
@@ -119,9 +169,22 @@ async function submitPublish() {
     if (!publishForm.deadline.trim()) return message.warning("请填写截止时间");
     if (!publishForm.location.trim()) return message.warning("请填写地点");
     if (!publishForm.contact.trim()) return message.warning("请填写联系方式");
+    const item = {
+      id: `u-${Date.now()}` as string,
+      category: publishForm.category,
+      title: publishForm.title.trim(),
+      subtitle: publishForm.subtitle.trim(),
+      details: publishForm.details.trim(),
+      price: publishForm.price.trim(),
+      deadline: publishForm.deadline.trim(),
+      location: publishForm.location.trim(),
+      contact: publishForm.contact.trim(),
+    };
+    addPublish(item);
     message.success("发布成功（示例）");
     publishOpen.value = false;
     resetPublishForm();
+    listTab.value = "mine_publish";
   });
 }
 </script>
@@ -138,6 +201,21 @@ async function submitPublish() {
           <PlusOutlined />
           发布需求
         </Button>
+      </div>
+
+      <div class="list-tabs">
+        <span class="label">视图</span>
+        <Segmented
+          v-model:value="listTab"
+          :options="[
+            { label: '全部', value: 'all' },
+            { label: '我的发布', value: 'mine_publish' },
+            { label: '我的订单', value: 'mine_order' },
+          ]"
+        />
+        <p v-if="listTab !== 'all' && !currentPhone()" class="tab-hint">
+          请先登录后使用「我的发布 / 我的订单」。
+        </p>
       </div>
 
       <div class="toolbar">
@@ -351,6 +429,31 @@ async function submitPublish() {
   margin: 0 0 16px;
   color: #64748b;
   font-size: 14px;
+}
+
+.list-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+  margin-bottom: 12px;
+  padding: 12px 14px;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.85);
+}
+
+.list-tabs .label {
+  font-size: 13px;
+  font-weight: 700;
+  color: #334155;
+}
+
+.tab-hint {
+  margin: 0;
+  width: 100%;
+  font-size: 12px;
+  color: #b45309;
 }
 
 .toolbar {

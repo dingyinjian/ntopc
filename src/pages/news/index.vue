@@ -91,7 +91,19 @@ function closeDetail() {
       <div v-if="activeNews" class="detail">
         <div class="meta">
           <Tag color="geekblue">{{ activeNews.category }}</Tag>
-          <span class="meta-item">来源：{{ activeNews.source }}</span>
+          <span class="meta-item">
+            来源：
+            <a
+              v-if="activeNews.sourceUrl"
+              class="source-link"
+              :href="activeNews.sourceUrl"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              {{ activeNews.source }}
+            </a>
+            <template v-else>{{ activeNews.source }}</template>
+          </span>
           <span class="meta-item">时间：{{ activeNews.time }}</span>
         </div>
         <Typography.Paragraph class="detail-summary">
@@ -240,6 +252,16 @@ function closeDetail() {
   white-space: pre-wrap;
   word-break: break-word;
   color: #334155;
+}
+
+.source-link {
+  color: #2563eb;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.source-link:hover {
+  text-decoration: underline;
 }
 
 @media (max-width: 640px) {

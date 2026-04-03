@@ -1,9 +1,18 @@
+export interface CommunityAttachment {
+  name: string;
+  /** data URL 或占位说明（本地演示） */
+  url: string;
+}
+
 export interface CommunityQuestion {
   id: string;
   title: string;
   /** 问题正文 */
   content: string;
   authorName: string;
+  /** 登录用户发布时记录手机号，用于「我的发布」筛选 */
+  authorPhone?: string;
+  attachments?: CommunityAttachment[];
   createdAt: string;
 }
 

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Cascader, message } from "ant-design-vue";
-import { EnvironmentOutlined } from "@ant-design/icons-vue";
+import { AimOutlined, EnvironmentOutlined } from "@ant-design/icons-vue";
 import { useOpcAppRegion } from "../composables/useOpcAppRegion";
 import { regionData } from "../utils/regionMatch";
 
@@ -8,7 +8,7 @@ const { regionPath, regionLabelText, loadingGeo, geoError, restoreUserRegion } =
 
 function onRestoreRegion() {
   restoreUserRegion();
-  message.success("已恢复为您的默认地区");
+  message.success("已按档案/默认地区重定位");
 }
 </script>
 
@@ -18,7 +18,10 @@ function onRestoreRegion() {
       <EnvironmentOutlined />
     </span>
     <span class="bar-label">所在地区</span>
-    <button type="button" class="restore-region-btn" @click="onRestoreRegion">恢复我的地区</button>
+    <button type="button" class="restore-region-btn" @click="onRestoreRegion">
+      <AimOutlined class="restore-ico" aria-hidden="true" />
+      重定位
+    </button>
     <Cascader
       v-model:value="regionPath"
       :options="regionData"
@@ -78,6 +81,9 @@ function onRestoreRegion() {
 }
 
 .restore-region-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   flex-shrink: 0;
   padding: 6px 12px;
   font-size: 12px;
@@ -88,6 +94,10 @@ function onRestoreRegion() {
   border-radius: 8px;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
+}
+
+.restore-ico {
+  font-size: 14px;
 }
 
 .restore-region-btn:hover {

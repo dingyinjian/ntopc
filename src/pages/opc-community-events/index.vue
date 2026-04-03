@@ -1,16 +1,34 @@
 <script setup lang="ts">
-import { Button, Form, Input, Modal, Tag, message } from "ant-design-vue";
+import { Button, Form, Input, Modal, Segmented, Tag, message } from "ant-design-vue";
 import { CalendarOutlined, EnvironmentOutlined, FileTextOutlined } from "@ant-design/icons-vue";
-import { computed, reactive, ref } from "vue";
+import { computed, onBeforeUnmount, onMounted, reactive, ref } from "vue";
 import { NT_POLICY_DISTRICT_FILTERS } from "../../data/ntPolicyDistrictFilters";
 import { OPC_COMMUNITY_EVENTS, type OpcCommunityEventItem } from "../../data/opcCommunityEvents";
+import { useEventRegistrations } from "../../composables/useEventRegistrations";
 import { useNtDistrictFilter } from "../../composables/useNtDistrictFilter";
 import { useOpcAppRegion } from "../../composables/useOpcAppRegion";
+import { readStoredAuth } from "../../composables/useOpcRegionDefaults";
 import { useSubmitGuard } from "../../composables/useSubmitGuard";
 import { pathPrefixMatch } from "../../utils/regionMatch";
 
 const { regionPath, regionReady } = useOpcAppRegion();
 const { ntDistrictFilter, isNantongContext, applyNtDistrictFilter } = useNtDistrictFilter(regionPath);
+const { registerEvent, participatedEventIds } = useEventRegistrations();
+
+const eventListScope = ref<"all" | "joined">("all");
+const authTick = ref(0);
+
+function onAuthTick() {
+  authTick.value++;
+}
+
+onMounted(() => {
+  window.addEventListener("weopc-auth-changed", onAuthTick);
+});
+
+onBeforeUnmount(() => {
+  window.removeEventListener("weopc-auth-changed", onAuthTick);
+});
 const detailOpen = ref(false);
 const detailEvent = ref<OpcCommunityEventItem | null>(null);
 const registerOpen = ref(false);
@@ -24,13 +42,22 @@ const registerForm = reactive({
   remark: "",
 });
 
-const filteredEvents = computed(() => {
+const mergedRegionEvents = computed(() => {
   const sel = Array.isArray(regionPath.value) ? regionPath.value : [];
   const list =
     sel.length === 0
       ? OPC_COMMUNITY_EVENTS
       : OPC_COMMUNITY_EVENTS.filter((item) => pathPrefixMatch(item.regionPath, sel));
   return applyNtDistrictFilter(list);
+});
+
+const filteredEvents = computed(() => {
+  authTick.value;
+  const list = mergedRegionEvents.value;
+  if (eventListScope.value !== "joined") return list;
+  const phone = readStoredAuth()?.phone ?? "";
+  const ids = participatedEventIds(phone);
+  return list.filter((item) => ids.has(item.id));
 });
 
 function openDetail(item: OpcCommunityEventItem) {
@@ -68,6 +95,10 @@ async function submitRegister() {
       message.warning("请输入正确的手机号");
       return;
     }
+    const ev = activeEvent.value;
+    if (ev) {
+      registerEvent(ev.id, ev.title);
+    }
     message.success(`已提交报名：${activeEvent.value?.title ?? "活动"}`);
     registerForm.name = "";
     registerForm.phone = "";
@@ -76,6 +107,13 @@ async function submitRegister() {
     registerOpen.value = false;
   });
 }
+
+function onEventScopeChange(val: string | number) {
+  authTick.value;
+  if (val === "joined" && !readStoredAuth()?.phone) {
+    message.info("请先登录后查看「我参与的」");
+  }
+}
 </script>
 
 <template>
@@ -83,6 +121,18 @@ async function submitRegister() {
     <header class="head">
       <h1>OPC 社区活动</h1>
       <p class="lead">根据顶部「所在地区」展示当前区域可报名活动。</p>
+
+      <div class="event-scope-bar">
+        <span class="scope-label">活动列表</span>
+        <Segmented
+          v-model:value="eventListScope"
+          :options="[
+            { label: '全部', value: 'all' },
+            { label: '我参与的', value: 'joined' },
+          ]"
+          @change="onEventScopeChange"
+        />
+      </div>
 
       <div v-if="regionReady && isNantongContext" class="district-toolbar" aria-label="南通区县筛选">
         <span class="district-toolbar-label">区县筛选</span>
@@ -227,6 +277,24 @@ async function submitRegister() {
   color: #64748b;
   font-size: 14px;
   line-height: 1.6;
+}
+
+.event-scope-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+  margin-bottom: 14px;
+  padding: 12px 14px;
+  background: rgba(255, 255, 255, 0.75);
+  border: 1px solid rgba(226, 232, 240, 0.95);
+  border-radius: 14px;
+}
+
+.event-scope-bar .scope-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #334155;
 }
 
 .district-toolbar {

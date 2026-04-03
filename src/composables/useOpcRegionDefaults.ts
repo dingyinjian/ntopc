@@ -11,6 +11,12 @@ const geoError = ref<string | null>(null);
 export interface AuthRegionProfile {
   /** 登录用户档案中的省市区路径（与 Cascader value 一致），登录后由后端/本地写入 */
   regionPath: string[];
+  /** 展示用昵称（本地演示） */
+  displayName?: string;
+  /** 头像，多为 data URL（本地演示） */
+  avatarUrl?: string;
+  /** 是否已绑定微信（本地演示） */
+  wechatBound?: boolean;
 }
 
 export interface StoredAuth {
@@ -35,15 +41,38 @@ export function readStoredAuth(): StoredAuth | null {
 
 /** 开发用：登录成功时写入示例档案；接入真实 API 后替换为接口返回的 regionPath */
 export function writeAuthWithMockRegion(phone: string, regionPath: string[]) {
+  const prev = readStoredAuth();
   const payload: StoredAuth = {
     phone,
-    profile: { regionPath },
+    profile: {
+      ...(prev?.phone === phone ? prev.profile : undefined),
+      regionPath,
+    },
   };
+  if (prev?.phone === phone && prev.passwordHash) payload.passwordHash = prev.passwordHash;
   localStorage.setItem(WEOPC_AUTH_STORAGE_KEY, JSON.stringify(payload));
 }
 
 /** 默认地区：江苏省·南通市（省+市两级；区县由用户在 Cascader 中选择） */
 export const DEFAULT_APP_REGION_PATH = ["32", "3206"];
+
+/** 合并更新本地档案字段（演示用），成功后会派发 `weopc-auth-changed` */
+export function patchAuthProfile(patch: Partial<AuthRegionProfile>) {
+  const auth = readStoredAuth();
+  if (!auth?.phone) return false;
+  const basePath =
+    auth.profile?.regionPath?.length ? [...auth.profile.regionPath] : [...DEFAULT_APP_REGION_PATH];
+  const regionPathNext = patch.regionPath?.length ? [...patch.regionPath] : basePath;
+  const next: AuthRegionProfile = {
+    ...auth.profile,
+    ...patch,
+    regionPath: regionPathNext,
+  };
+  const payload: StoredAuth = { ...auth, profile: next };
+  localStorage.setItem(WEOPC_AUTH_STORAGE_KEY, JSON.stringify(payload));
+  window.dispatchEvent(new CustomEvent("weopc-auth-changed"));
+  return true;
+}
 
 /**
  * 演示用：若本地尚无登录信息，则写入示例账号（与 AuthModal 成功登录示例一致）。

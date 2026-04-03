@@ -4,6 +4,8 @@ export interface NewsItem {
   id: string;
   category: NewsCategory;
   source: string;
+  /** 来源原文链接，详情页可跳转 */
+  sourceUrl?: string;
   title: string;
   summary: string;
   time: string;
@@ -24,6 +26,7 @@ export const NEWS_LIST: NewsItem[] = [
     id: "n1",
     category: "媒体报道",
     source: "央视网",
+    sourceUrl: "https://www.cctv.com/",
     title: "多地推出创业扶持新举措，产业园区加速集聚创新要素",
     summary: "围绕场地、资金、算力与人才服务，多地出台组合政策，降低初创企业综合成本。",
     time: "2026-03-22 09:10",
@@ -34,6 +37,7 @@ export const NEWS_LIST: NewsItem[] = [
     id: "n2",
     category: "AI前沿",
     source: "澎湃新闻",
+    sourceUrl: "https://www.thepaper.cn/",
     title: "大模型应用进入工程化阶段，企业更关注可控成本与安全合规",
     summary: "从“能跑”到“能用”，AI落地正在向可观测、可治理与可持续的工程化体系演进。",
     time: "2026-03-24 14:35",
@@ -44,6 +48,7 @@ export const NEWS_LIST: NewsItem[] = [
     id: "n3",
     category: "政策解读",
     source: "园区发布（示例）",
+    sourceUrl: "https://weopc.com.cn/",
     title: "算力券申领指南：适用对象、额度规则与常见材料清单",
     summary: "以企业类型与业务规模为基准，按月/季度核算，明确申领材料与审核口径。",
     time: "2026-03-26 10:00",
@@ -54,6 +59,7 @@ export const NEWS_LIST: NewsItem[] = [
     id: "n4",
     category: "产业动态",
     source: "新华财经（示例）",
+    sourceUrl: "https://www.cnfin.com/",
     title: "产业链协同加速：从单点创新到生态共建的新阶段",
     summary: "更多园区以“产业链+场景”组织创新，推动上下游与服务机构协同。",
     time: "2026-03-28 08:20",
@@ -64,6 +70,7 @@ export const NEWS_LIST: NewsItem[] = [
     id: "n5",
     category: "园区快讯",
     source: "南通社区公告（示例）",
+    sourceUrl: "https://weopc.com.cn/",
     title: "南通 OPC 社区活动日程发布：路演、政策解读与资源对接",
     summary: "本月将举办多场活动，覆盖融资路演、算力资源对接与企业合规分享。",
     time: "2026-03-30 16:05",

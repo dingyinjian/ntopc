@@ -1,14 +1,17 @@
 <script setup lang="ts">
-import { Avatar, Button, Card, Form, Input, Modal, Statistic, Table, Tag, message } from "ant-design-vue";
+import { Avatar, Button, Card, Form, Input, Modal, Statistic, Table, Tag, Upload, message } from "ant-design-vue";
 import {
+  CameraOutlined,
   CopyOutlined,
+  EditOutlined,
   GiftOutlined,
   LockOutlined,
   TeamOutlined,
   UserOutlined,
+  WechatOutlined,
 } from "@ant-design/icons-vue";
 import { computed, onBeforeUnmount, onMounted, reactive, ref } from "vue";
-import { readStoredAuth } from "../../composables/useOpcRegionDefaults";
+import { patchAuthProfile, readStoredAuth } from "../../composables/useOpcRegionDefaults";
 import { useSubmitGuard } from "../../composables/useSubmitGuard";
 import { changeStoredPassword, setStoredPassword } from "../../utils/authPassword";
 import { useInviteProfile } from "../../composables/useInviteProfile";
@@ -24,8 +27,10 @@ const {
 } = useInviteProfile();
 
 const pwdOpen = ref(false);
+const nameOpen = ref(false);
 const pwdHasSet = ref(false);
 const authUiTick = ref(0);
+const nameForm = reactive({ displayName: "" });
 const pwdForm = reactive({
   old: "",
   new: "",
@@ -47,8 +52,21 @@ const passwordStatusText = computed(() => {
 });
 
 const displayName = computed(() => {
+  authUiTick.value;
   if (!loggedPhone.value) return "未登录";
+  const nick = readStoredAuth()?.profile?.displayName?.trim();
+  if (nick) return nick;
   return maskPhone(loggedPhone.value);
+});
+
+const avatarUrl = computed(() => {
+  authUiTick.value;
+  return readStoredAuth()?.profile?.avatarUrl?.trim() || "";
+});
+
+const wechatBound = computed(() => {
+  authUiTick.value;
+  return !!readStoredAuth()?.profile?.wechatBound;
 });
 
 const avatarText = computed(() => {
@@ -174,6 +192,60 @@ function onAuthChanged() {
   authUiTick.value++;
 }
 
+function openNameModal() {
+  nameForm.displayName = readStoredAuth()?.profile?.displayName?.trim() ?? "";
+  nameOpen.value = true;
+}
+
+function saveDisplayName() {
+  const v = nameForm.displayName.trim();
+  if (!v) {
+    message.warning("请输入用户名");
+    return;
+  }
+  if (v.length > 32) {
+    message.warning("用户名不超过 32 字");
+    return;
+  }
+  patchAuthProfile({ displayName: v });
+  message.success("用户名已更新");
+  nameOpen.value = false;
+  authUiTick.value++;
+}
+
+function beforeAvatarUpload(file: File) {
+  if (!file.type.startsWith("image/")) {
+    message.error("请上传图片文件");
+    return false;
+  }
+  if (file.size > 900 * 1024) {
+    message.error("图片请小于 900KB");
+    return false;
+  }
+  const reader = new FileReader();
+  reader.onload = () => {
+    patchAuthProfile({ avatarUrl: String(reader.result) });
+    message.success("头像已更新");
+    authUiTick.value++;
+  };
+  reader.readAsDataURL(file);
+  return false;
+}
+
+function confirmBindWechat() {
+  Modal.confirm({
+    title: "绑定微信",
+    content: "演示环境将模拟完成绑定，不产生真实微信授权。",
+    okText: "确认绑定",
+    cancelText: "取消",
+    onOk() {
+      patchAuthProfile({ wechatBound: true });
+      message.success("已绑定微信（演示）");
+      authUiTick.value++;
+    },
+  });
+}
+
 onMounted(() => {
   window.addEventListener("weopc-auth-changed", onAuthChanged);
   authUiTick.value++;
@@ -193,15 +265,36 @@ onBeforeUnmount(() => {
 
     <Card class="user-card" :bordered="false">
       <div class="user-row">
-        <Avatar class="user-avatar" :size="80" :style="{ background: '#4f46e5' }">
-          <template v-if="isLoggedIn">
-            <span class="avatar-char">{{ avatarText }}</span>
-          </template>
-          <UserOutlined v-else style="font-size: 36px" />
-        </Avatar>
+        <div class="avatar-block">
+          <Avatar class="user-avatar" :size="80" :src="avatarUrl || undefined" :style="avatarUrl ? {} : { background: '#4f46e5' }">
+            <template v-if="isLoggedIn && !avatarUrl">
+              <span class="avatar-char">{{ avatarText }}</span>
+            </template>
+            <UserOutlined v-if="!isLoggedIn" style="font-size: 36px" />
+          </Avatar>
+          <Upload v-if="isLoggedIn" :show-upload-list="false" :before-upload="beforeAvatarUpload" accept="image/*">
+            <Button type="link" size="small" class="avatar-action">
+              <CameraOutlined />
+              更换头像
+            </Button>
+          </Upload>
+        </div>
         <div class="user-meta">
-          <div class="label">用户名</div>
+          <div class="label-row">
+            <span class="label">用户名</span>
+            <Tag v-if="isLoggedIn && wechatBound" color="success">微信已绑定</Tag>
+          </div>
           <div class="name">{{ displayName }}</div>
+          <div v-if="isLoggedIn" class="profile-actions">
+            <Button size="small" type="default" @click="openNameModal">
+              <EditOutlined />
+              修改用户名
+            </Button>
+            <Button v-if="!wechatBound" size="small" type="primary" ghost class="wx-btn" @click="confirmBindWechat">
+              <WechatOutlined />
+              绑定微信
+            </Button>
+          </div>
           <p v-if="!isLoggedIn" class="hint">登录后可同步邀请码与邀请记录</p>
         </div>
       </div>
@@ -295,6 +388,20 @@ onBeforeUnmount(() => {
         </Table>
       </template>
     </Card>
+
+    <Modal
+      v-model:open="nameOpen"
+      title="修改用户名"
+      ok-text="保存"
+      cancel-text="取消"
+      @ok="saveDisplayName"
+    >
+      <Form layout="vertical">
+        <Form.Item label="用户名" required>
+          <Input v-model:value="nameForm.displayName" placeholder="2–32 个字符" :maxlength="32" show-count />
+        </Form.Item>
+      </Form>
+    </Modal>
 
     <Modal
       v-model:open="pwdOpen"
@@ -395,10 +502,43 @@ onBeforeUnmount(() => {
   font-weight: 700;
 }
 
+.avatar-block {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.avatar-action {
+  padding: 0;
+  height: auto;
+  font-size: 12px;
+}
+
+.label-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 4px;
+}
+
 .user-meta .label {
   font-size: 12px;
   color: #64748b;
-  margin-bottom: 4px;
+}
+
+.profile-actions {
+  margin-top: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.wx-btn {
+  color: #16a34a !important;
+  border-color: #bbf7d0 !important;
+  background: #f0fdf4 !important;
 }
 
 .user-meta .name {

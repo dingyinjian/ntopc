@@ -76,15 +76,20 @@ function ensureLoaded() {
 export function useCommunityQA() {
   ensureLoaded();
 
-  function addQuestion(title: string, content: string) {
+  function addQuestion(title: string, content: string, attachments?: { name: string; url: string }[]) {
     const t = title.trim();
     const c = content.trim();
     if (!t || !c) return;
+    const auth = readStoredAuth();
+    const atts =
+      attachments?.filter((x) => x.name && x.url).map((x) => ({ name: x.name, url: x.url })) ?? [];
     const q: CommunityQuestion = {
       id: genId("q"),
       title: t,
       content: c,
       authorName: currentAuthorName(),
+      authorPhone: auth?.phone,
+      attachments: atts.length ? atts : undefined,
       createdAt: new Date().toISOString(),
     };
     questions.value = [q, ...questions.value];
